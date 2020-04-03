@@ -1,0 +1,3 @@
+.venv/
+redis_data_transfer/__pycache__/
+redis_data_transfer.egg-info/
