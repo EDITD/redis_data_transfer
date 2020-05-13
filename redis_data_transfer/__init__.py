@@ -144,8 +144,9 @@ class RedisInserter(Drain):
         self.output = open(target_file, 'w')
 
     def process_item(self, item):
-        self.output.write(json.dumps(item))
+        self.output.write(item.decode("utf-8"))
+        self.output.write("\n")
         return True
 
     def finalise_batch(self, _batch):
-        pass
+        self.output.flush()
