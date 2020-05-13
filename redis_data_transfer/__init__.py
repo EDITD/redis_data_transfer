@@ -65,7 +65,7 @@ def move_data(
     scanner.start()
 
     readers = [
-        RedisReader(f'reader_{i}', source, read_queue, write_queue, tracker_queue, log_queue, track_items)
+        RedisReader(f'reader_{i}', destination, read_queue, write_queue, tracker_queue, log_queue, track_items)
         for i in range(num_readers)
     ]
     for reader in readers:
