@@ -1,6 +1,7 @@
 from logging.handlers import QueueListener
 from multiprocessing import Manager, Queue
 import argparse
+import json
 import logging
 
 from redis_data_transfer.display import Display
@@ -116,34 +117,35 @@ class RedisScanner(Source):
 
 
 class RedisReader(Processor):
-    def __init__(self, name, source, read_queue, write_queue, results, log_queue, track_items):
+    def __init__(self, name, target_host, read_queue, write_queue, results, log_queue, track_items):
         super(RedisReader, self).__init__(
             name, results, log_queue, read_queue, write_queue, track_items,
         )
-        redis = _redis_client(source, self.logger)
-        self.pipe = redis.pipeline()
-
-    def process_item(self, item):
-        self.pipe.get(item)
-        return True
-
-    def finalise_batch(self, batch):
-        values = self.pipe.execute()
-        return list(zip(batch, values))
-
-
-class RedisInserter(Drain):
-    def __init__(self, name, target_host, log_queue, input_queue, results, track_items):
-        super(RedisInserter, self).__init__(name, results, log_queue, input_queue, track_items)
-
         redis = _redis_client(target_host, self.logger)
         self.pipe = redis.pipeline()
 
     def process_item(self, item):
-        key, value = item
-        if value is not None:
-            self.pipe.set(key, value)
-            return True
+        self.pipe.exists(item)
+        return True
+
+    def finalise_batch(self, batch):
+        results = self.pipe.execute()
+        missing = []
+        for i, key_result in enumerate(results):
+            if key_result != 1:
+                missing.append(batch[i])
+        return missing
+
+
+class RedisInserter(Drain):
+    def __init__(self, name, target_file, log_queue, input_queue, results, track_items):
+        super(RedisInserter, self).__init__(name, results, log_queue, input_queue, track_items)
+
+        self.output = open(target_file, 'w')
+
+    def process_item(self, item):
+        self.output.write(json.dumps(item))
+        return True
 
     def finalise_batch(self, _batch):
-        self.pipe.execute()
+        pass
