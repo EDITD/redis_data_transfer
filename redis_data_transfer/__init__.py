@@ -72,7 +72,7 @@ def move_data(
         reader.start()
 
     writers = [
-        RedisInserter(f'writer_{i}', destination, log_queue, write_queue, tracker_queue, track_items)
+        RedisInserter(f'writer_{i}', "/home/ubuntu/missing_keys.txt", log_queue, write_queue, tracker_queue, track_items)
         for i in range(num_writers)
     ]
     for writer in writers:
