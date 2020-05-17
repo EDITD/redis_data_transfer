@@ -4,11 +4,9 @@ import argparse
 import logging
 
 from redis_data_transfer.display import Display
-from redis_data_transfer.processing import Drain, Processor, Source
+from redis_data_transfer.processing import Drain, Processor, Source, TombStone
 from redis_data_transfer.redis_client import _redis_client
 from redis_data_transfer.state import StatsTracker
-
-TOMBSTONE = "This is the end"
 
 
 def main():
@@ -86,13 +84,13 @@ def move_data(
         scanner.join()
 
         for _ in range(num_readers):
-            read_queue.put(TOMBSTONE)
+            read_queue.put(TombStone())
 
         for reader in readers:
             reader.join()
 
         for _ in range(num_writers):
-            write_queue.put(TOMBSTONE)
+            write_queue.put(TombStone())
 
         for writer in writers:
             writer.join()
