@@ -10,8 +10,8 @@ authors = ["EDITED Devs <dev@edited.com>"]
 
 [tool.poetry.dependencies]
 python = "^3.6"
-redis-py-cluster = "^2.0.0"
-setproctitle = "^1.1.10"
+redis-py-cluster = "~2.0.0"
+setproctitle = "~1.1.10"
 
 [tool.poetry.dev-dependencies]
 ipython = "~7.14.0"
