@@ -124,7 +124,7 @@ class RedisReader(Processor):
         self.pipe = redis.pipeline()
 
     def process_item(self, item):
-        self.pipe.get(item)
+        self.pipe.dump(item)
         return True
 
     def finalise_batch(self, batch):
@@ -142,7 +142,7 @@ class RedisInserter(Drain):
     def process_item(self, item):
         key, value = item
         if value is not None:
-            self.pipe.set(key, value)
+            self.pipe.restore(key, 0, value, replace=False)
             return True
 
     def finalise_batch(self, _batch):
