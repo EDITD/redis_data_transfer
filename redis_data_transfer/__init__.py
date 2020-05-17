@@ -1,5 +1,5 @@
 from logging.handlers import QueueListener
-from multiprocessing import Manager, Queue
+from multiprocessing import Queue
 import argparse
 import logging
 
