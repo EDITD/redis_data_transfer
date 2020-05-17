@@ -5,12 +5,12 @@ description = "Transfer data between a redis instances or clusters"
 authors = ["EDITED Devs <dev@edited.com>"]
 
 [tool.poetry.dependencies]
-python = "^3.7"
+python = "^3.6"
 redis-py-cluster = "^2.0.0"
 setproctitle = "^1.1.10"
 
 [tool.poetry.dev-dependencies]
-ipython = ""
+ipython = "~7.14.0"
 
 [build-system]
 requires = ["poetry>=0.12"]
