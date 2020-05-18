@@ -2,3 +2,4 @@
 __pycache__/
 redis_data_transfer.egg-info/
 .tox/
+dist/
