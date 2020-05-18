@@ -6,3 +6,11 @@ python:
 services: docker
 install: pip install tox-travis
 script: tox
+deploy:
+  provider: pypi
+  user: __token__
+  # Due to a bug, using the environment variable defined in the UI for the password
+  # https://github.com/travis-ci/travis.rb/issues/687
+  on:
+    tags: true
+  skip_existing: true
