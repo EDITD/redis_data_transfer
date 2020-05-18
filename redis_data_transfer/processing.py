@@ -8,7 +8,8 @@ import setproctitle
 from redis_data_transfer.state import StatsTracker
 
 
-TOMBSTONE = "This is the end"
+class TombStone:
+    pass
 
 
 class QueueLoggingMixin:
@@ -112,7 +113,7 @@ class Drain(BaseProcess):
             except Empty:
                 continue
             else:
-                if batch == TOMBSTONE:
+                if isinstance(batch, TombStone):
                     break
 
             with self.tracker.track('process'):

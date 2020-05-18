@@ -1,14 +1,12 @@
 from logging.handlers import QueueListener
-from multiprocessing import Manager, Queue
+from multiprocessing import Queue
 import argparse
 import logging
 
 from redis_data_transfer.display import Display
-from redis_data_transfer.processing import Drain, Processor, Source
+from redis_data_transfer.processing import Drain, Processor, Source, TombStone
 from redis_data_transfer.redis_client import _redis_client
 from redis_data_transfer.state import StatsTracker
-
-TOMBSTONE = "This is the end"
 
 
 def main():
@@ -86,13 +84,13 @@ def move_data(
         scanner.join()
 
         for _ in range(num_readers):
-            read_queue.put(TOMBSTONE)
+            read_queue.put(TombStone())
 
         for reader in readers:
             reader.join()
 
         for _ in range(num_writers):
-            write_queue.put(TOMBSTONE)
+            write_queue.put(TombStone())
 
         for writer in writers:
             writer.join()
@@ -124,7 +122,7 @@ class RedisReader(Processor):
         self.pipe = redis.pipeline()
 
     def process_item(self, item):
-        self.pipe.get(item)
+        self.pipe.dump(item)
         return True
 
     def finalise_batch(self, batch):
@@ -142,7 +140,7 @@ class RedisInserter(Drain):
     def process_item(self, item):
         key, value = item
         if value is not None:
-            self.pipe.set(key, value)
+            self.pipe.restore(key, 0, value, replace=False)
             return True
 
     def finalise_batch(self, _batch):

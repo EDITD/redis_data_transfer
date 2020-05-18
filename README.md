@@ -18,17 +18,3 @@ For details about the options available:
 
 The code is [hosted on github](https://github.com/EDITD/redis_data_transfer)
 The repository uses [poetry](https://python-poetry.org/) for packaging.
-
-### Docker image
-The docker image allows to run the tool easily from hosts where running a docker container is easier
-than installing a python tool.
-
-To build the image:
-```
-docker build -t redis-data-transfer:vX.Y.Z .
-```
-
-To run the tool:
-```
-docker run --rm -it redis-data-transfer:vX.Y.Z [options] your.source.server your.destination.server
-```
