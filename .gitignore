@@ -1,3 +1,4 @@
 .venv/
-redis_data_transfer/__pycache__/
+__pycache__/
 redis_data_transfer.egg-info/
+.tox/
