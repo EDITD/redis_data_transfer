@@ -4,7 +4,7 @@ build-backend = "poetry.masonry.api"
 
 [tool.poetry]
 name = "redis-data-transfer"
-version = "0.2.0"
+version = "1.0.0"
 description = "Transfer data between a redis instances or clusters"
 license = "MIT"
 authors = ["EDITED Devs <dev@edited.com>"]
