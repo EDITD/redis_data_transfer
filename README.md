@@ -1,5 +1,5 @@
 [![Build Status](https://travis-ci.org/EDITD/redis_data_transfer.svg?branch=master)](https://travis-ci.org/EDITD/redis_data_transfer)
-[![Pypi Version](https://img.shields.io/pypi/v/redis_data_transfer.svg)](https://pypi.org/project/redis_data_transfer/)	[![Pypi Version](https://img.shields.io/pypi/v/redis_data_transfer.svg)](https://pypi.org/project/redis_data_transfer/)
+[![Pypi Version](https://img.shields.io/pypi/v/redis_data_transfer.svg)](https://pypi.org/project/redis_data_transfer/)
 [![Python Versions](https://img.shields.io/pypi/pyversions/redis_data_transfer.svg)](https://pypi.org/project/redis_data_transfer/)
 
 # Redis data transfer tool
