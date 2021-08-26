@@ -16,6 +16,7 @@ def main():
     parser.add_argument('destination', help="Destination server as  as hostname[:port][#database]")
     parser.add_argument('--count', help="Number of key/values to copy", default=None, type=int)
     parser.add_argument('--batch', help="Number of key/values per batch", default=10000, type=int)
+    parser.add_argument('--checkers', help='Number of checker processes', default=1, type=int)
     parser.add_argument('--readers', help='Number of reader processes', default=1, type=int)
     parser.add_argument('--writers', help='Number of writer processes', default=1, type=int)
     parser.add_argument('--track-items', help='Track each item processed',
@@ -32,7 +33,7 @@ def main():
     move_data(
         args.source, args.destination,
         args.count, args.batch,
-        args.readers, args.writers,
+        args.checkers, args.readers, args.writers,
         log_queue,
         args.track_items,
         args.refresh_interval,
@@ -50,16 +51,24 @@ def _configure_logging():
 def move_data(
         source, destination,
         count, batch_size,
-        num_readers, num_writers,
+        num_checkers, num_readers, num_writers,
         log_queue,
         track_items, refresh_interval,
 ):
+    check_queue = Queue(maxsize=num_checkers * 4)
     read_queue = Queue(maxsize=num_readers * 4)
     write_queue = Queue(maxsize=num_writers * 4)
     tracker_queue = Queue()
 
-    scanner = RedisScanner(source, count, batch_size, read_queue, tracker_queue, log_queue, track_items)
+    scanner = RedisScanner(source, count, batch_size, check_queue, tracker_queue, log_queue, track_items)
     scanner.start()
+
+    checkers = [
+        RedisChecker(f'checker_{i}', destination, check_queue, read_queue, tracker_queue, log_queue, track_items)
+        for i in range(num_checkers)
+    ]
+    for checker in checkers:
+        checker.start()
 
     readers = [
         RedisReader(f'reader_{i}', source, read_queue, write_queue, tracker_queue, log_queue, track_items)
@@ -82,6 +91,12 @@ def move_data(
 
     with tracker.track('process'):
         scanner.join()
+
+        for _ in range(num_checkers):
+            check_queue.put(TombStone())
+
+        for checker in checkers:
+            checker.join()
 
         for _ in range(num_readers):
             read_queue.put(TombStone())
@@ -111,6 +126,23 @@ class RedisScanner(Source):
             return next(self.scan_iter)
         except StopIteration:
             return None
+
+
+class RedisChecker(Processor):
+    def __init__(self, name, target_host, check_queue, read_queue, results, log_queue, track_items):
+        super(RedisChecker, self).__init__(
+            name, results, log_queue, check_queue, read_queue, track_items,
+        )
+        redis = _redis_client(target_host, self.logger)
+        self.pipe = redis.pipeline()
+
+    def process_item(self, item):
+        self.pipe.exists(item)
+        return True
+
+    def finalise_batch(self, batch):
+        results = self.pipe.execute()
+        return [key for key, exists in zip(batch, results) if not exists]
 
 
 class RedisReader(Processor):

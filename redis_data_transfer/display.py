@@ -49,7 +49,7 @@ class Display(BaseProcess):
         sorted_keys = sorted(
             self.state.keys(),
             key=lambda name: (
-                {'s': 0, 'r': 1, 'w': 2, 'g': 3}[name[0]],
+                {'c': 0, 's': -1, 'r': 1, 'w': 2, 'g': 3}[name[0]],
                 int(name.rsplit('_', maxsplit=1)[-1]),
             ),
         )
