@@ -1,7 +1,7 @@
 import contextlib
-import functools
 import os
 import queue
+import unittest
 
 import docker
 import redis
@@ -34,72 +34,105 @@ def redis_server(container_name):
     finally:
         if container is not None:
             container.remove(force=True)
+        client.close()
 
 
-def add_redis_server(server_name):
-    def decorator(test_func):
-        @functools.wraps(test_func)
-        def wrapper(*args, **kwargs):
-            with redis_server(server_name) as redis_server_ports:
-                kwargs[f'{server_name}_port'] = redis_server_ports
-                return test_func(*args, **kwargs)
-        return wrapper
-    return decorator
+class TestRedisDataTransfer(unittest.TestCase):
+    def test_copy_simple(self):
+        with redis_server("source") as source_port, redis_server("destination") as destination_port:
+            _check_move_data(
+                source_port, destination_port,
+                count=None, batch_size=1000,
+                num_checkers=1, num_readers=1, num_writers=1,
+                sample_size=1000,
+            )
 
+    def test_copy_with_count(self):
+        with redis_server("source") as source_port, redis_server("destination") as destination_port:
+            _check_move_data(
+                source_port, destination_port,
+                count=100, batch_size=10000,
+                num_checkers=1, num_readers=1, num_writers=1,
+                sample_size=1000,
+            )
 
-@add_redis_server("source")
-@add_redis_server("destination")
-def test_copy_simple(source_port, destination_port):
-    _check_move_data(
-        source_port, destination_port,
-        count=None, batch_size=1000,
-        num_checkers=1, num_readers=1, num_writers=1,
-        sample_size=1000,
-    )
+    def test_copy_multiple_readers_and_writers(self):
+        with redis_server("source") as source_port, redis_server("destination") as destination_port:
+            _check_move_data(
+                source_port, destination_port,
+                count=None, batch_size=10000,
+                num_checkers=3, num_readers=3, num_writers=3,
+                sample_size=1000,
+            )
 
+    def test_copy_no_checker(self):
+        with redis_server("source") as source_port, redis_server("destination") as destination_port:
+            _check_move_data(
+                source_port, destination_port,
+                count=None, batch_size=10000,
+                num_checkers=0, num_readers=1, num_writers=1,
+                sample_size=1000,
+            )
 
-@add_redis_server("source")
-@add_redis_server("destination")
-def test_copy_with_count(source_port, destination_port):
-    _check_move_data(
-        source_port, destination_port,
-        count=100, batch_size=10000,
-        num_checkers=1, num_readers=1, num_writers=1,
-        sample_size=1000,
-    )
+    def test_copy_many_batches(self):
+        with redis_server("source") as source_port, redis_server("destination") as destination_port:
+            _check_move_data(
+                source_port, destination_port,
+                count=None, batch_size=100,
+                num_checkers=1, num_readers=1, num_writers=1,
+                sample_size=10000,
+            )
 
+    def test_copy_with_checker_and_preexisting_data(self):
+        with redis_server("source") as source_port, redis_server("destination") as destination_port:
+            batch_size = 100
+            sample_size_partial = 100
+            sample_size_total = 1000
 
-@add_redis_server("source")
-@add_redis_server("destination")
-def test_copy_multiple_readers_and_writers(source_port, destination_port):
-    _check_move_data(
-        source_port, destination_port,
-        count=None, batch_size=10000,
-        num_checkers=3, num_readers=3, num_writers=3,
-        sample_size=1000,
-    )
+            dummy_log_queue = queue.Queue()
 
+            source = redis.Redis(host="127.0.0.1", port=source_port)
+            destination = redis.Redis(host="127.0.0.1", port=destination_port)
 
-@add_redis_server("source")
-@add_redis_server("destination")
-def test_copy_no_checker(source_port, destination_port):
-    _check_move_data(
-        source_port, destination_port,
-        count=None, batch_size=10000,
-        num_checkers=0, num_readers=1, num_writers=1,
-        sample_size=1000,
-    )
+            assert 0 == source.dbsize()
+            assert 0 == destination.dbsize()
 
+            num_inserted_source = _insert_fake_data(source, sample_size_total)
 
-@add_redis_server("source")
-@add_redis_server("destination")
-def test_copy_many_batches(source_port, destination_port):
-    _check_move_data(
-        source_port, destination_port,
-        count=None, batch_size=100,
-        num_checkers=1, num_readers=1, num_writers=1,
-        sample_size=10000,
-    )
+            assert num_inserted_source == source.dbsize()
+            assert 0 == destination.dbsize()
+
+            move_data(
+                source=f'127.0.0.1:{source_port}',
+                destination=f'127.0.0.1:{destination_port}',
+                count=sample_size_partial,
+                batch_size=batch_size,
+                num_checkers=0,
+                num_readers=1,
+                num_writers=1,
+                log_queue=dummy_log_queue,
+                track_items=False,
+                refresh_interval=1.0,
+            )
+
+            assert num_inserted_source == source.dbsize()
+            assert sample_size_partial == destination.dbsize()
+
+            move_data(
+                source=f'127.0.0.1:{source_port}',
+                destination=f'127.0.0.1:{destination_port}',
+                count=None,
+                batch_size=batch_size,
+                num_checkers=1,
+                num_readers=1,
+                num_writers=1,
+                log_queue=dummy_log_queue,
+                track_items=False,
+                refresh_interval=1.0,
+            )
+
+            assert num_inserted_source == source.dbsize()
+            assert num_inserted_source == destination.dbsize()
 
 
 def _check_move_data(
@@ -141,59 +174,6 @@ def _check_move_data(
         expected_transfered = min(count, num_inserted)
 
     assert expected_transfered == destination.dbsize()
-
-
-@add_redis_server("source")
-@add_redis_server("destination")
-def test_copy_with_checker_and_preexisting_data(source_port, destination_port):
-    batch_size = 100
-    sample_size_partial = 100
-    sample_size_total = 1000
-
-    dummy_log_queue = queue.Queue()
-
-    source = redis.Redis(host="127.0.0.1", port=source_port)
-    destination = redis.Redis(host="127.0.0.1", port=destination_port)
-
-    assert 0 == source.dbsize()
-    assert 0 == destination.dbsize()
-
-    num_inserted_source = _insert_fake_data(source, sample_size_total)
-
-    assert num_inserted_source == source.dbsize()
-    assert 0 == destination.dbsize()
-
-    move_data(
-        source=f'127.0.0.1:{source_port}',
-        destination=f'127.0.0.1:{destination_port}',
-        count=sample_size_partial,
-        batch_size=batch_size,
-        num_checkers=0,
-        num_readers=1,
-        num_writers=1,
-        log_queue=dummy_log_queue,
-        track_items=False,
-        refresh_interval=1.0,
-    )
-
-    assert num_inserted_source == source.dbsize()
-    assert sample_size_partial == destination.dbsize()
-
-    move_data(
-        source=f'127.0.0.1:{source_port}',
-        destination=f'127.0.0.1:{destination_port}',
-        count=None,
-        batch_size=batch_size,
-        num_checkers=1,
-        num_readers=1,
-        num_writers=1,
-        log_queue=dummy_log_queue,
-        track_items=False,
-        refresh_interval=1.0,
-    )
-
-    assert num_inserted_source == source.dbsize()
-    assert num_inserted_source == destination.dbsize()
 
 
 def _insert_fake_data(client, sample_size):
