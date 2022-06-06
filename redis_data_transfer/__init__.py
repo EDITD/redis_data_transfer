@@ -16,7 +16,7 @@ def main():
     parser.add_argument('destination', help="Destination server as  as hostname[:port][#database]")
     parser.add_argument('--count', help="Number of key/values to copy", default=None, type=int)
     parser.add_argument('--batch', help="Number of key/values per batch", default=10000, type=int)
-    parser.add_argument('--checkers', help='Number of checker processes', default=1, type=int)
+    parser.add_argument('--checkers', help='Number of checker processes', default=0, type=int)
     parser.add_argument('--readers', help='Number of reader processes', default=1, type=int)
     parser.add_argument('--writers', help='Number of writer processes', default=1, type=int)
     parser.add_argument('--track-items', help='Track each item processed',
@@ -55,20 +55,26 @@ def move_data(
         log_queue,
         track_items, refresh_interval,
 ):
-    check_queue = Queue(maxsize=num_checkers * 4)
     read_queue = Queue(maxsize=num_readers * 4)
     write_queue = Queue(maxsize=num_writers * 4)
     tracker_queue = Queue()
 
-    scanner = RedisScanner(source, count, batch_size, check_queue, tracker_queue, log_queue, track_items)
-    scanner.start()
+    if num_checkers:
+        check_queue = Queue(maxsize=num_checkers * 4)
 
-    checkers = [
-        RedisChecker(f'checker_{i}', destination, check_queue, read_queue, tracker_queue, log_queue, track_items)
-        for i in range(num_checkers)
-    ]
-    for checker in checkers:
-        checker.start()
+        checkers = [
+            RedisChecker(f'checker_{i}', destination, check_queue, read_queue, tracker_queue, log_queue, track_items)
+            for i in range(num_checkers)
+        ]
+        for checker in checkers:
+            checker.start()
+
+        scanner_destination = check_queue
+    else:
+        scanner_destination = read_queue
+
+    scanner = RedisScanner(source, count, batch_size, scanner_destination, tracker_queue, log_queue, track_items)
+    scanner.start()
 
     readers = [
         RedisReader(f'reader_{i}', source, read_queue, write_queue, tracker_queue, log_queue, track_items)
@@ -92,11 +98,12 @@ def move_data(
     with tracker.track('process'):
         scanner.join()
 
-        for _ in range(num_checkers):
-            check_queue.put(TombStone())
+        if num_checkers:
+            for _ in range(num_checkers):
+                check_queue.put(TombStone())
 
-        for checker in checkers:
-            checker.join()
+            for checker in checkers:
+                checker.join()
 
         for _ in range(num_readers):
             read_queue.put(TombStone())
