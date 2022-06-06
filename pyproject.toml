@@ -31,7 +31,7 @@ redis-py-cluster = "~2.0.0"
 setproctitle = "~1.1.10"
 
 [tool.poetry.dev-dependencies]
-ipython = "~7.14.0"
+ipython = "~7.16.3"
 docker = "^4.2.0"
 
 [tool.poetry.scripts]
